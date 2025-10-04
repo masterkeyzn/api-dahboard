@@ -102,9 +102,9 @@ class ApiTransactions extends Controller
     private static function formatResponse(array $response): array
     {
         return [
-            'success' => ($response['status'] ?? 0) == 1,
-            'message' => $response['msg'] ?? 'FAILED',
-            'data'    => $response,
+            'success' => ($response['success'] ?? false) == true,
+            'message' => $response['message'] ?? 'FAILED',
+            'data'    => $response['data'] ?? null,
         ];
     }
 }
