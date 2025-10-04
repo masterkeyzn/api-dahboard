@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
@@ -13,42 +12,64 @@ class ApiTransactions extends Controller
         $api = ApiGame::firstOrFail();
 
         $payload = array_merge([
-            'agent_code' => $api->agent_code,
+            'agent_code'  => $api->agent_code,
             'agent_token' => $api->agent_token,
         ], $data);
 
         try {
-            return Http::timeout(15)
+            $response = Http::timeout(15)
                 ->connectTimeout(5)
                 ->acceptJson()
-                ->post("{$api->api_url}$endpoint", $payload)
-                ->json();
+                ->withHeaders([
+                    'X-Agent-Code' => $api->agent_code,
+                    'X-Secret-Key' => $api->agent_token,
+                ])
+                ->post("{$api->api_url}$endpoint", $data);
+
+            $json = $response->json();
+
+            if ($json === null) {
+                Log::warning("API Response not JSON", [
+                    'endpoint' => $endpoint,
+                    'payload'  => $payload,
+                    'status'   => $response->status(),
+                    'body'     => $response->body(),
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Invalid or empty JSON response',
+                    'status'  => $response->status(),
+                    'body'    => $response->body(),
+                ];
+            }
+
+            return $json;
+
         } catch (\Throwable $e) {
+            Log::error("API Request failed", [
+                'endpoint' => $endpoint,
+                'payload'  => $payload,
+                'api_url'  => $api->api_url,
+                'error'    => $e->getMessage(),
+            ]);
+
             return [
                 'success' => false,
-                'message' => 'Request failed: ' . $e->getMessage()
+                'message' => 'Request failed: ' . $e->getMessage(),
             ];
         }
     }
 
     public static function deposit(string $userCode, int $amount): array
     {
-        $endpoint = '/api/v2/user_deposit';
+        $endpoint = '/user/transfer';
 
         return self::formatResponse(
             self::sendRequest($endpoint, [
                 'user_code' => $userCode,
-                'amount' => $amount,
+                'amount'    => $amount,
             ])
-        );
-    }
-
-    public static function getBalance(): array
-    {
-        $endpoint = '/api/v2/info';
-
-        return self::formatResponse(
-            self::sendRequest($endpoint, [])
         );
     }
 
@@ -63,12 +84,12 @@ class ApiTransactions extends Controller
 
     public static function withdraw(string $userCode, ?int $amount = null): array
     {
-        $endpoint = '/api/v2/user_withdraw';
+        $endpoint = '/user/transfer';
 
         $payload = ['user_code' => $userCode];
 
-        if (!$amount === null) {
-            $payload['amount'] = $amount;
+        if (! $amount === null) {
+            $payload['amount'] = -$amount;
         }
 
         return self::formatResponse(
@@ -81,7 +102,7 @@ class ApiTransactions extends Controller
         return [
             'success' => ($response['status'] ?? 0) == 1,
             'message' => $response['msg'] ?? 'FAILED',
-            'data' => $response,
+            'data'    => $response,
         ];
     }
 }
