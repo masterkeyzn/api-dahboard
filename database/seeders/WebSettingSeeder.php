@@ -34,7 +34,6 @@ class WebSettingSeeder extends Seeder
             'max_withdrawal' => 999999999,
             'unique_code' => "None",
             'is_maintenance' => false,
-            'exp' => $expired ?? now()
         ]);
     }
 }

@@ -173,91 +173,6 @@ class AgentController extends Controller
         }
     }
 
-    public function addDays(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'credential_id' => 'required|exists:admin_credentials,id',
-            'day'           => 'required|integer',
-        ]);
-
-        if ($validator->fails()) {
-            Log::warning('Validation failed', $validator->errors()->toArray());
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Validation failed',
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-
-        try {
-            $credential = AdminCredential::findOrFail($request->credential_id);
-        } catch (Exception $e) {
-            Log::error('Failed to find AdminCredential', ['error' => $e->getMessage()]);
-            return response()->json(['status' => 'error', 'message' => 'Admin not found'], 404);
-        }
-
-        $expiredDate    = Carbon::parse($credential->expired);
-        $newExpiredDate = $request->day < 0
-        ? $expiredDate->addDays($request->day)
-        : ($expiredDate->isPast()
-            ? Carbon::today()->addDays($request->day)
-            : $expiredDate->copy()->addDays($request->day));
-
-        $connectionName = "mysql_agent_{$credential->id}";
-
-        config([
-            "database.connections.{$connectionName}" => [
-                'driver'    => 'mysql',
-                'host'      => $credential->database_host,
-                'port'      => $credential->database_port,
-                'database'  => $credential->database_name,
-                'username'  => $credential->database_username,
-                'password'  => $credential->database_password,
-                'charset'   => 'utf8mb4',
-                'collation' => 'utf8mb4_unicode_ci',
-                'options'   => [
-                    PDO::MYSQL_ATTR_INIT_COMMAND => 'SET time_zone = "+07:00"',
-                ],
-            ],
-        ]);
-
-        try {
-            DB::connection($connectionName)->getPdo();
-        } catch (Exception $e) {
-            Log::error('Failed to connect to agent database', ['error' => $e->getMessage()]);
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Gagal terhubung ke database.',
-                'error'   => $e->getMessage(),
-            ], 500);
-        }
-
-        try {
-            DB::connection($connectionName)
-                ->table('web_settings')
-                ->update(['exp' => $newExpiredDate]);
-
-            $credential->expired = $newExpiredDate->toDateTimeString();
-            $credential->save();
-
-            $this->purgeCacheKey('site_config', $credential->redis_prefix);
-
-            return response()->json([
-                'status'           => 'success',
-                'agent'            => $credential->agent_code,
-                'message'          => 'Tanggal expired berhasil diperbarui.',
-                'new_expired_date' => $newExpiredDate->toDateTimeString(),
-            ], 200);
-        } catch (Exception $e) {
-            Log::error('Failed to update web_settings or save credential', ['error' => $e->getMessage()]);
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Gagal memperbarui kolom exp di web_settings.',
-                'error'   => $e->getMessage(),
-            ], 500);
-        }
-    }
-
     private function purgeCacheKey(string $key, string $prefix): void
     {
         try {
@@ -306,8 +221,6 @@ class AgentController extends Controller
             'redis_port'        => 'nullable|string|max:10',
             'redis_password'    => 'nullable|string|max:255',
             'redis_prefix'      => 'required|string|max:255',
-
-            'expired'           => 'nullable|date',
             'type'              => 'required|in:OLD,NEW',
         ]);
 

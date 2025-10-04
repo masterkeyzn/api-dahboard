@@ -147,7 +147,6 @@ class AuthController extends Controller
             'agent_token' => $credential?->agent_token,
             'pusher_key'  => $credential?->pusher_key,
             'logo'        => $webSettings?->site_logo,
-            'exp'         => $webSettings?->exp,
         ]);
     }
 
@@ -540,7 +539,7 @@ class AuthController extends Controller
     public function webInformations()
     {
         try {
-            $exp = WebSetting::select('exp', 'is_maintenance')->first();
+            $exp = WebSetting::select('is_maintenance')->first();
 
             $response = ApiTransactions::getBalance();
 
@@ -563,7 +562,6 @@ class AuthController extends Controller
             return response()->json([
                 'total_balance_agent' => $agentBalance,
                 'total_balance_user'  => $totalUserBalance,
-                'exp'                 => $exp?->exp,
                 'is_maintenance'      => $exp?->is_maintenance,
             ]);
         } catch (\Throwable $e) {
