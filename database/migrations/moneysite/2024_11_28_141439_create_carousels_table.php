@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('carousels', function (Blueprint $table) {
             $table->id();
-            $table->enum('type', ['mobile', 'desktop', 'all']);
+            $table->enum('type', ['mobile', 'desktop', 'all'])->default('all');
             $table->string('image');
             $table->timestamps();
         });
