@@ -248,7 +248,7 @@ class AuthController extends Controller
 
         try {
             $newAdmin = Admin::create([
-                'username'            => "{$user->admin_credential_id}{$request->username}",
+                'username' => "{$user->admin_credential_id}{$request->username}",
                 'password'            => Hash::make($request->password),
                 'max_transaction'     => $request->maxTransaction,
                 'admin_credential_id' => $user->admin_credential_id,
@@ -282,7 +282,7 @@ class AuthController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'username'       => "required|string|max:255|unique:admins,username,{$request->id}",
+            'username' => "required|string|max:255|unique:admins,username,{$request->id}",
             'maxTransaction' => 'required|string',
             'level'          => 'required|in:SuperAdmin,Admin,CustomerService',
             'password'       => 'nullable|string|min:6',
