@@ -4,29 +4,27 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class OwnerApi
 {
     /**
-     * Handle an incoming request.
+     * Handle an incoming request and validate the PG-API-KEY header.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Closure(\Illuminate\Http\Request): \Symfony\Component\HttpFoundation\Response  $next
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $apiKey = $request->header('PG-API-KEY');
-        $apiSecret = $request->header('PG-API-SECRET');
+        $providedKey = $request->header('PG-API-KEY');
+        $validKey    = env('PG_API_KEY');
 
-        if (
-            $apiKey !== env('PG_API_KEY') ||
-            $apiSecret !== env('PG_API_SECRET')
-        ) {
+        if (empty($providedKey) || $providedKey !== $validKey) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized'
-            ], 401);
+                'message' => 'Unauthorized: Invalid or missing API key.',
+            ], Response::HTTP_UNAUTHORIZED);
         }
 
         return $next($request);
