@@ -73,9 +73,9 @@ class ApiTransactions extends Controller
         );
     }
 
-    public static function resetUserBalance(): array
+    public static function getBalance(): array
     {
-        $endpoint = '/api/v2/user_withdraw_all';
+        $endpoint = '/agent/info';
 
         return self::formatResponse(
             self::sendRequest($endpoint, [])
