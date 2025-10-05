@@ -74,27 +74,24 @@ class ApiTransactions extends Controller
         );
     }
 
+    public static function withdraw(string $userCode, int $amount): array
+    {
+        $endpoint = '/user/transfer';
+
+        return self::formatResponse(
+            self::sendRequest($endpoint, [
+                'user_code' => $userCode,
+                'amount'    => $amount,
+            ])
+        );
+    }
+
     public static function getBalance(): array
     {
         $endpoint = '/agent/info';
 
         return self::formatResponse(
             self::sendRequest($endpoint, [])
-        );
-    }
-
-    public static function withdraw(string $userCode, ?int $amount = null): array
-    {
-        $endpoint = '/user/transfer';
-
-        $payload = ['user_code' => $userCode];
-
-        if (! $amount === null) {
-            $payload['amount'] = -$amount;
-        }
-
-        return self::formatResponse(
-            self::sendRequest($endpoint, $payload)
         );
     }
 
