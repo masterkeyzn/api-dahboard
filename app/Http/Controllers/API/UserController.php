@@ -1,9 +1,7 @@
 <?php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Moneysite\GameTransaction;
 use App\Models\Moneysite\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -50,9 +48,9 @@ class UserController extends Controller
             }
         }
 
-        if ($request->filled('daterange') && (!$request->filled('search') || empty($request->search))) {
+        if ($request->filled('daterange') && (! $request->filled('search') || empty($request->search))) {
             $startDate = Carbon::parse($request->daterange[0])->startOfDay();
-            $endDate = Carbon::parse($request->daterange[1])->endOfDay();
+            $endDate   = Carbon::parse($request->daterange[1])->endOfDay();
             $query->whereBetween('users.created_at', [$startDate, $endDate]);
         }
 
@@ -60,7 +58,7 @@ class UserController extends Controller
         $totalFiltered = $filteredQuery->count();
 
         $length = $request->length ?: 10;
-        $page = $request->page ?: 1;
+        $page   = $request->page ?: 1;
 
         $users = $query->orderByDesc('users.created_at')
             ->offset(($page - 1) * $length)
@@ -68,10 +66,10 @@ class UserController extends Controller
             ->get();
 
         return response()->json([
-            'draw' => $request->draw,
-            'recordsTotal' => User::count(),
+            'draw'            => $request->draw,
+            'recordsTotal'    => User::count(),
             'recordsFiltered' => $totalFiltered,
-            'data' => $users,
+            'data'            => $users,
         ]);
     }
 
@@ -81,23 +79,23 @@ class UserController extends Controller
             $user = User::with('userbank')->findOrFail($userId);
 
             return $this->apiResponse(true, 'User data retrieved successfully.', 200, [
-                'id' => $user->id,
-                'username' => $user->username,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'player_token' => $user->player_token,
-                'ip' => $user->ip,
-                'is_new_member' => $user->is_new_member,
-                'can_login' => $user->can_login,
-                'can_play_game' => $user->can_play_game,
+                'id'             => $user->id,
+                'username'       => $user->username,
+                'email'          => $user->email,
+                'phone'          => $user->phone,
+                'player_token'   => $user->player_token,
+                'ip'             => $user->ip,
+                'is_new_member'  => $user->is_new_member,
+                'can_login'      => $user->can_login,
+                'can_play_game'  => $user->can_play_game,
                 'active_balance' => $user->active_balance,
-                'status' => $user->status,
-                'userbank' => $user->userbank ? [
-                    'bank_name' => $user->userbank->bank_name,
-                    'account_name' => $user->userbank->account_name,
+                'status'         => $user->status,
+                'userbank'       => $user->userbank ? [
+                    'bank_name'      => $user->userbank->bank_name,
+                    'account_name'   => $user->userbank->account_name,
                     'account_number' => $user->userbank->account_number,
                 ] : null,
-                'created_at' => $user->created_at->toDateTimeString(),
+                'created_at'     => $user->created_at->toDateTimeString(),
             ]);
         } catch (ModelNotFoundException $e) {
             return $this->apiResponse(false, 'User not found.', 404);
@@ -117,40 +115,24 @@ class UserController extends Controller
                 return $this->apiResponse(false, $validated->errors()->first(), 422);
             }
 
-            $user = User::findOrFail($id);
+            $user   = User::findOrFail($id);
             $amount = (float) $request->amount;
 
-            $admin = auth()->guard('admin')->user();
+            $admin    = auth()->guard('admin')->user();
             $response = ApiTransactions::deposit($user->player_token, (int) $amount);
 
-            if (!$response['success']) {
+            if (! $response['success']) {
                 return $this->apiResponse(false, $response['message'] ?? 'Deposit gagal', 424);
             }
 
-            $data = $response['data'] ?? [];
-            $status = $data['status'] ?? 0;
-            $msg = $data['msg'] ?? 'Unknown error';
-            $userBalance = $data['user_balance'] ?? null;
+            $data        = $response['data'] ?? [];
+            $status      = $data['success'] ?? false;
+            $msg         = $data['message'] ?? 'Unknown error';
+            $userBalance = $data['balance'] ?? null;
 
             if ($userBalance === null) {
                 return $this->apiResponse(false, 'User balance not returned from API.', 422);
             }
-
-            GameTransaction::create([
-                'status'         => $status,
-                'msg'            => $msg,
-                'agent_code'     => $admin->credential->agent_code,
-                'agent_balance'  => $data['agent_balance'] ?? 0,
-                'agent_type'     => 'Transfer',
-                'user_code'      => $user->player_token,
-                'user_balance'   => $userBalance,
-                'deposit_amount' => $amount,
-                'currency'       => $data['currency'] ?? 'IDR',
-                'order_no'       => $data['order_no'] ?? 0,
-                'admin_id'       => $admin->id,
-                'action_by'      => 'admin',
-                'action_note'    => 'Top-up manual oleh admin (via API)',
-            ]);
 
             $user->active_balance = $userBalance;
             $user->save();
@@ -163,7 +145,6 @@ class UserController extends Controller
         }
     }
 
-
     public function withdrawal(Request $request, string $id)
     {
         try {
@@ -175,41 +156,25 @@ class UserController extends Controller
                 return $this->apiResponse(false, $validated->errors()->first(), 422);
             }
 
-            $user = User::findOrFail($id);
+            $user   = User::findOrFail($id);
             $amount = (float) $validated->validated()['amount'];
 
             $admin = auth()->guard('admin')->user();
 
             $response = ApiTransactions::withdraw($user->player_token, (int) $amount);
 
-            if (!$response['success']) {
+            if (! $response['success']) {
                 return $this->apiResponse(false, $response['message'] ?? 'Withdraw gagal', 424);
             }
 
-            $data = $response['data'] ?? [];
-            $status = $data['status'] ?? 0;
-            $msg = $data['msg'] ?? 'Unknown error';
-            $userBalance = $data['user_balance'] ?? null;
+            $data        = $response['data'] ?? [];
+            $status      = $data['success'] ?? false;
+            $msg         = $data['message'] ?? 'Unknown error';
+            $userBalance = $data['balance'] ?? null;
 
             if ($userBalance === null) {
                 return $this->apiResponse(false, 'User balance not returned from API.', 424);
             }
-
-            GameTransaction::create([
-                'status'         => $status,
-                'msg'            => $msg,
-                'agent_code'     => $admin?->credential?->agent_code,
-                'agent_balance'  => $data['agent_balance'] ?? 0,
-                'agent_type'     => 'Transfer',
-                'user_code'      => $user->player_token,
-                'user_balance'   => $userBalance,
-                'deposit_amount' => $amount * -1,
-                'currency'       => $data['currency'] ?? 'IDR',
-                'order_no'       => $data['order_no'] ?? 0,
-                'admin_id'       => $admin?->id,
-                'action_by'      => 'admin',
-                'action_note'    => 'Withdraw manual oleh admin (via API)',
-            ]);
 
             $user->active_balance = $userBalance;
             $user->save();
@@ -233,7 +198,7 @@ class UserController extends Controller
                 return $this->apiResponse(false, $validator->errors()->first(), 422);
             }
 
-            $user = User::findOrFail($id);
+            $user           = User::findOrFail($id);
             $user->password = Hash::make($request->newPassword);
             $user->save();
 
@@ -243,19 +208,18 @@ class UserController extends Controller
         }
     }
 
-
     public function status(string $userId, string $field)
     {
         try {
             $allowedFields = ['can_login', 'can_play_game'];
 
-            if (!in_array($field, $allowedFields)) {
+            if (! in_array($field, $allowedFields)) {
                 return $this->apiResponse(false, 'Invalid status field requested.', 422);
             }
 
             $user = User::findOrFail($userId);
 
-            $user->$field = !$user->$field;
+            $user->$field = ! $user->$field;
             $user->save();
 
             return $this->apiResponse(
@@ -273,26 +237,26 @@ class UserController extends Controller
     {
         try {
             $validated = $request->validate([
-                'bank_name' => 'required|string|max:255',
-                'account_name' => 'required|string|max:255',
+                'bank_name'      => 'required|string|max:255',
+                'account_name'   => 'required|string|max:255',
                 'account_number' => 'required|string|max:255',
             ]);
 
-            $user = User::findOrFail($id);
+            $user     = User::findOrFail($id);
             $userBank = $user->userbank;
 
-            if (!$userBank) {
+            if (! $userBank) {
                 return $this->apiResponse(false, 'Bank account not found for this user.', 404);
             }
 
-            $userBank->bank_name = $validated['bank_name'];
-            $userBank->account_name = $validated['account_name'];
+            $userBank->bank_name      = $validated['bank_name'];
+            $userBank->account_name   = $validated['account_name'];
             $userBank->account_number = $validated['account_number'];
             $userBank->save();
 
             return $this->apiResponse(true, 'Bank account updated successfully.', 200, [
-                'bank_name' => $userBank->bank_name,
-                'account_name' => $userBank->account_name,
+                'bank_name'      => $userBank->bank_name,
+                'account_name'   => $userBank->account_name,
                 'account_number' => $userBank->account_number,
             ]);
         } catch (\Exception $e) {
