@@ -1,16 +1,12 @@
 <?php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
-use App\Models\Moneysite\GameTransaction;
 use App\Models\Moneysite\Transaction;
 use App\Models\Moneysite\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Pusher\Pusher;
 
 class WithdrawalController extends Controller
@@ -39,7 +35,7 @@ class WithdrawalController extends Controller
         });
 
         $length = $request->length ?: 10;
-        $page = $request->page ?: 1;
+        $page   = $request->page ?: 1;
         $offset = ($page - 1) * $length;
 
         $total = (clone $query)->count();
@@ -50,25 +46,24 @@ class WithdrawalController extends Controller
             ->get();
 
         return response()->json([
-            'draw' => $request->draw,
-            'recordsTotal' => $total,
+            'draw'            => $request->draw,
+            'recordsTotal'    => $total,
             'recordsFiltered' => $total,
-            'data' => $data,
+            'data'            => $data,
         ]);
     }
-
 
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'withdrawal_id' => 'required',
-            'note' => 'nullable|string|max:500',
-            'action' => 'required|in:Approved,Rejected',
+            'note'          => 'nullable|string|max:500',
+            'action'        => 'required|in:Approved,Rejected',
         ], [
-            'note.string' => 'Note must be a string.',
-            'note.max' => 'Note cannot exceed 500 characters.',
+            'note.string'     => 'Note must be a string.',
+            'note.max'        => 'Note cannot exceed 500 characters.',
             'action.required' => 'Action is required.',
-            'action.in' => 'Action must be either "Approved" or "Rejected".',
+            'action.in'       => 'Action must be either "Approved" or "Rejected".',
         ]);
 
         if ($validator->fails()) {
@@ -76,15 +71,15 @@ class WithdrawalController extends Controller
         }
 
         $validated = $validator->validated();
-        $id = $validated['withdrawal_id'];
-        $note = $validated['note'];
-        $action = $validated['action'];
+        $id        = $validated['withdrawal_id'];
+        $note      = $validated['note'];
+        $action    = $validated['action'];
 
         $withdrawal = Transaction::find($id);
-        $user = User::find($withdrawal->user_id);
-        $admin = auth()->guard('admin')->user();
+        $user       = User::find($withdrawal->user_id);
+        $admin      = auth()->guard('admin')->user();
 
-        if (!$withdrawal || !$user) {
+        if (! $withdrawal || ! $user) {
             return $this->apiResponse(false, 'Withdrawal or user not found.', 404);
         }
 
@@ -95,12 +90,12 @@ class WithdrawalController extends Controller
         // === APPROVE ===
         if ($action === 'Approved' && $withdrawal->status !== 'Approved') {
             $withdrawal->status = 'Approved';
-            $withdrawal->note = $note;
-            $withdrawal->admin = $admin->username;
+            $withdrawal->note   = $note;
+            $withdrawal->admin  = $admin->username;
             $withdrawal->save();
 
             $this->triggerPusher([
-                'status' => 'Approved',
+                'status'         => 'Approved',
                 'transaction_id' => $withdrawal->id,
             ]);
 
@@ -111,13 +106,13 @@ class WithdrawalController extends Controller
         if ($action === 'Rejected' && $withdrawal->status === 'Pending') {
             try {
                 $response = ApiTransactions::deposit($user->player_token, (int) $withdrawal->amount);
-                $data = $response['data'] ?? [];
+                $data     = $response['data'] ?? [];
 
-                $status = $data['status'] ?? null;
-                $msg = $data['msg'] ?? 'Unknown error occurred.';
-                $userBalance = $data['user_balance'] ?? null;
+                $status      = $data['success'] ?? false;
+                $msg         = $response['messgae'] ?? 'Unknown error occurred.';
+                $userBalance = $data['balance'] ?? null;
 
-                if ($status !== 1 || $userBalance === null) {
+                if ($status || $userBalance === null) {
                     return $this->apiResponse(false, $msg ?: 'User balance not returned from API.', 422);
                 }
 
@@ -131,24 +126,8 @@ class WithdrawalController extends Controller
                     'active_balance' => (float) $userBalance,
                 ]);
 
-                GameTransaction::create([
-                    'status'         => $status,
-                    'msg'            => $msg,
-                    'agent_code'     => $admin->credential->agent_code ?? '',
-                    'agent_balance'  => $data['agent_balance'] ?? 0,
-                    'agent_type'     => 'Transfer',
-                    'user_code'      => $user->player_token,
-                    'user_balance'   => $userBalance,
-                    'deposit_amount' => (float) $withdrawal->amount,
-                    'currency'       => $data['currency'] ?? 'IDR',
-                    'order_no'       => $data['order_no'] ?? 0,
-                    'admin_id'       => $admin->id,
-                    'action_by'      => 'admin',
-                    'action_note'    => 'Refund saldo karena withdrawal ditolak (via API)',
-                ]);
-
                 $this->triggerPusher([
-                    'status' => 'Rejected',
+                    'status'         => 'Rejected',
                     'transaction_id' => $withdrawal->id,
                 ]);
 
@@ -158,26 +137,25 @@ class WithdrawalController extends Controller
             }
         }
 
-
         return $this->apiResponse(false, 'Invalid action or status.', 422);
     }
 
     private function triggerPusher($data)
     {
         $adminCredential = Auth::guard('admin')->user()->credential;
-        $pusher = new Pusher(
+        $pusher          = new Pusher(
             $adminCredential->pusher_key,
             $adminCredential->pusher_secret,
             $adminCredential->pusher_app_id,
             [
                 'cluster' => 'ap1',
-                'useTLS' => true,
+                'useTLS'  => true,
             ]
         );
         $pusher->trigger('my-channel', 'withdraw-status', [
-            'status' => $data['status'],
+            'status'         => $data['status'],
             'transaction_id' => $data['transaction_id'],
-            'admin' => Auth::guard('admin')->user()->username,
+            'admin'          => Auth::guard('admin')->user()->username,
         ]);
     }
 }

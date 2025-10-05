@@ -1,10 +1,8 @@
 <?php
-
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Moneysite\Bonusdeposit;
-use App\Models\Moneysite\GameTransaction;
 use App\Models\Moneysite\Transaction;
 use App\Models\Moneysite\User;
 use Illuminate\Http\Request;
@@ -45,20 +43,20 @@ class DepositController extends Controller
         });
 
         $length = $request->length ?: 10;
-        $page = $request->page ?: 1;
+        $page   = $request->page ?: 1;
         $offset = ($page - 1) * $length;
 
         $total = (clone $query)->count();
-        $data = $query->offset($offset)->limit($length)->orderByDesc('transactions.created_at')->get();
+        $data  = $query->offset($offset)->limit($length)->orderByDesc('transactions.created_at')->get();
 
         $bonusList = Bonusdeposit::select('id', 'name')->get();
 
         return response()->json([
-            'draw' => $request->draw,
-            'recordsTotal' => $total,
+            'draw'            => $request->draw,
+            'recordsTotal'    => $total,
             'recordsFiltered' => $total,
-            'bonusList' => $bonusList,
-            'data' => $data,
+            'bonusList'       => $bonusList,
+            'data'            => $data,
         ]);
     }
 
@@ -66,21 +64,21 @@ class DepositController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'deposit_id' => 'required|integer',
-            'bonus' => 'nullable|integer',
-            'note' => 'nullable|string|max:500',
-            'action' => 'required|in:Approved,Rejected',
+            'bonus'      => 'nullable|integer',
+            'note'       => 'nullable|string|max:500',
+            'action'     => 'required|in:Approved,Rejected',
         ], [
             'deposit_id.required' => 'Deposit ID wajib diisi.',
-            'deposit_id.integer' => 'Deposit ID harus berupa angka.',
+            'deposit_id.integer'  => 'Deposit ID harus berupa angka.',
 
-            'bonus.integer' => 'Bonus harus berupa angka (ID).',
-            'bonus.exists' => 'Bonus yang dipilih tidak ditemukan.',
+            'bonus.integer'       => 'Bonus harus berupa angka (ID).',
+            'bonus.exists'        => 'Bonus yang dipilih tidak ditemukan.',
 
-            'note.string' => 'Catatan harus berupa teks.',
-            'note.max' => 'Catatan maksimal 500 karakter.',
+            'note.string'         => 'Catatan harus berupa teks.',
+            'note.max'            => 'Catatan maksimal 500 karakter.',
 
-            'action.required' => 'Action wajib dipilih.',
-            'action.in' => 'Action harus bernilai "Approved" atau "Rejected".',
+            'action.required'     => 'Action wajib dipilih.',
+            'action.in'           => 'Action harus bernilai "Approved" atau "Rejected".',
         ]);
 
         if ($validator->fails()) {
@@ -88,26 +86,30 @@ class DepositController extends Controller
         }
 
         $validated = $validator->validated();
-        $id = $validated['deposit_id'];
-        $bonusId = isset($validated['bonus']) ? (int) $validated['bonus'] : null;
-        $note = $validated['note'];
-        $action = $validated['action'];
+        $id        = $validated['deposit_id'];
+        $bonusId   = isset($validated['bonus']) ? (int) $validated['bonus'] : null;
+        $note      = $validated['note'];
+        $action    = $validated['action'];
 
         $deposit = Transaction::find($id);
-        if (!$deposit) return $this->apiResponse(false, 'Deposit not found.', 404);
+        if (! $deposit) {
+            return $this->apiResponse(false, 'Deposit not found.', 404);
+        }
 
         if ($deposit->amount > auth()->guard('admin')->user()->max_transaction) {
             return $this->apiResponse(false, 'Transaction amount exceeds the maximum limit.', 422);
         }
 
-        $user = User::find($deposit->user_id);
-        $amount = $deposit->amount;
-        $bonusAmount = 0;
+        $user         = User::find($deposit->user_id);
+        $amount       = $deposit->amount;
+        $bonusAmount  = 0;
         $bonusDeposit = null;
 
         if ($bonusId !== null && $bonusId !== 0) {
             $bonusDeposit = Bonusdeposit::find($bonusId);
-            if (!$bonusDeposit) return $this->apiResponse(false, 'Bonus not found.', 404);
+            if (! $bonusDeposit) {
+                return $this->apiResponse(false, 'Bonus not found.', 404);
+            }
 
             if ($bonusDeposit->type === 'bonus_persen') {
                 $bonusAmount = ($bonusDeposit->amount / 100) * $amount;
@@ -130,19 +132,19 @@ class DepositController extends Controller
 
                 if ($bonusAmount > 0) {
                     $createTransactionBonus = new Transaction([
-                        'user_id' => $user->id,
-                        'transaction_id' => $user->id . time(),
-                        'amount' => $bonusAmount,
-                        'type' => 'Bonus',
+                        'user_id'          => $user->id,
+                        'transaction_id'   => $user->id . time(),
+                        'amount'           => $bonusAmount,
+                        'type'             => 'Bonus',
                         'sender_bank_name' => 'Bank/Admin',
-                        'bonus_id' => $bonusDeposit->id,
-                        'note' => $bonusDeposit->name,
-                        'status' => 'Approved',
-                        'admin' => auth()->guard('admin')->user()->username,
+                        'bonus_id'         => $bonusDeposit->id,
+                        'note'             => $bonusDeposit->name,
+                        'status'           => 'Approved',
+                        'admin'            => auth()->guard('admin')->user()->username,
                     ]);
                 }
 
-                $response = null;
+                $response    = null;
                 $userBalance = null;
 
                 $response = ApiTransactions::deposit(
@@ -150,34 +152,15 @@ class DepositController extends Controller
                     (int) $totalDepositAmount
                 );
 
-                $admin = auth()->guard('admin')->user();
-                $status = $response['data']['status'] ?? null;
-                $msg = $response['data']['msg'] ?? 'Unknown error occurred.';
-                $userBalance = $response['data']['user_balance'] ?? null;
+                $admin       = auth()->guard('admin')->user();
+                $status      = $response['data']['success'] ?? false;
+                $msg         = $response['message'] ?? 'Unknown error occurred.';
+                $userBalance = $response['data']['balance'] ?? null;
 
-                if ($status !== 1 || $userBalance === null) {
+                if ($status || $userBalance === null) {
                     DB::rollBack();
                     return $this->apiResponse(false, $msg, 500);
                 }
-
-                GameTransaction::create([
-                    'status'         => $status,
-                    'msg'            => $msg,
-                    'agent_code'     => $admin->credential->agent_code ?? '',
-                    'agent_balance'  => $response['data']['agent_balance'] ?? 0,
-                    'agent_type'     => $response['data']['agent_type'] ?? 'Transfer',
-                    'user_code'      => $user->player_token,
-                    'user_balance'   => $userBalance,
-                    'deposit_amount' => $totalDepositAmount,
-                    'currency'       => $response['data']['currency'] ?? 'IDR',
-                    'order_no'       => $response['data']['order_no'] ?? 0,
-                    'admin_id'       => $admin?->id,
-                    'action_by'      => 'admin',
-                    'action_note'    => $user->is_playing
-                        ? 'Deposit dilakukan saat user sedang bermain'
-                        : 'Deposit dilakukan meskipun user sedang tidak bermain',
-                ]);
-
 
                 if ($userBalance === null) {
                     DB::rollBack();
@@ -186,17 +169,19 @@ class DepositController extends Controller
 
                 $deposit->update([
                     'status' => 'Approved',
-                    'bonus' => $bonusDeposit->name ?? null,
-                    'note' => $note,
-                    'admin' => auth()->guard('admin')->user()->username,
+                    'bonus'  => $bonusDeposit->name ?? null,
+                    'note'   => $note,
+                    'admin'  => auth()->guard('admin')->user()->username,
                 ]);
 
                 $user->update([
                     'active_balance' => (float) $userBalance,
-                    'is_new_member' => false,
+                    'is_new_member'  => false,
                 ]);
 
-                if ($createTransactionBonus) $createTransactionBonus->save();
+                if ($createTransactionBonus) {
+                    $createTransactionBonus->save();
+                }
 
                 $totalDeposits = Transaction::where('user_id', $user->id)
                     ->where('type', 'Deposit')
@@ -205,14 +190,12 @@ class DepositController extends Controller
 
                 $isFirstDeposit = $totalDeposits === 1;
 
-
                 if (
                     $user->userReferral &&
                     $user->userReferral->referral &&
                     $user->userReferral->referral->status === 'active'
                 ) {
                     $referral = $user->userReferral->referral;
-
 
                     $userReferral = $user->userReferral;
 
@@ -224,11 +207,11 @@ class DepositController extends Controller
                         $referral->referral_balance += $ndpCommission;
                         $referral->save();
 
-                        $userReferral->first_deposit_at = now();
+                        $userReferral->first_deposit_at     = now();
                         $userReferral->first_deposit_amount = $deposit->amount;
-                        $userReferral->ndp_commission = $ndpCommission;
-                        $userReferral->commission_earned = $ndpCommission;
-                        $userReferral->total_deposit_count = 1;
+                        $userReferral->ndp_commission       = $ndpCommission;
+                        $userReferral->commission_earned    = $ndpCommission;
+                        $userReferral->total_deposit_count  = 1;
                         $userReferral->save();
                     } else {
                         $rdpCommission = $referral->commission_rdp_type === 'percent'
@@ -245,11 +228,10 @@ class DepositController extends Controller
                     }
                 }
 
-
                 DB::commit();
 
                 $this->triggerPusher([
-                    'status' => 'Approved',
+                    'status'         => 'Approved',
                     'transaction_id' => $deposit->id,
                 ]);
 
@@ -264,13 +246,13 @@ class DepositController extends Controller
         if ($action === 'Rejected') {
             $deposit->update([
                 'status' => 'Rejected',
-                'bonus' => null,
-                'note' => $note,
-                'admin' => auth()->guard('admin')->user()->username,
+                'bonus'  => null,
+                'note'   => $note,
+                'admin'  => auth()->guard('admin')->user()->username,
             ]);
 
             $this->triggerPusher([
-                'status' => 'Rejected',
+                'status'         => 'Rejected',
                 'transaction_id' => $deposit->id,
             ]);
 
@@ -282,20 +264,20 @@ class DepositController extends Controller
 
     private function triggerPusher($data)
     {
-        $admin = Auth::guard('admin')->user()->credential;
+        $admin  = Auth::guard('admin')->user()->credential;
         $pusher = new Pusher(
             $admin->pusher_key,
             $admin->pusher_secret,
             $admin->pusher_app_id,
             [
                 'cluster' => 'ap1',
-                'useTLS' => true,
+                'useTLS'  => true,
             ]
         );
         $pusher->trigger('my-channel', 'deposit-status', [
-            'status' => $data['status'],
+            'status'         => $data['status'],
             'transaction_id' => $data['transaction_id'],
-            'admin' => Auth::guard('admin')->user()->username,
+            'admin'          => Auth::guard('admin')->user()->username,
         ]);
     }
 }
