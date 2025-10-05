@@ -6,7 +6,6 @@ use App\Models\Moneysite\ApiGame;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-
 class ApiTransactions extends Controller
 {
     public static function sendRequest(string $endpoint, array $data): array

@@ -126,8 +126,7 @@ class UserController extends Controller
             }
 
             $data        = $response['data'] ?? [];
-            $status      = $data['success'] ?? false;
-            $msg         = $data['message'] ?? 'Unknown error';
+            $msg         = $response['message'] ?? 'Unknown error';
             $userBalance = $data['balance'] ?? null;
 
             if ($userBalance === null) {
@@ -168,8 +167,7 @@ class UserController extends Controller
             }
 
             $data        = $response['data'] ?? [];
-            $status      = $data['success'] ?? false;
-            $msg         = $data['message'] ?? 'Unknown error';
+            $msg         = $response['message'] ?? 'Unknown error';
             $userBalance = $data['balance'] ?? null;
 
             if ($userBalance === null) {
