@@ -553,16 +553,13 @@ class AuthController extends Controller
 
             $data = $response['data'];
 
-            $agentBalance = $data['agent_balance'] ?? 0;
-            $userList     = $data['user_list'] ?? [];
-
-            $totalUserBalance = collect($userList)->sum('user_balance');
-
             return response()->json([
-                'total_balance_agent' => $agentBalance,
-                'total_balance_user'  => $totalUserBalance,
+                'total_balance_agent' => $data['agent_balance'] ?? 0,
+                'total_balance_user'  => $data['total_user_balance'] ?? 0,
                 'is_maintenance'      => $exp?->is_maintenance,
+                'username'            => $data['username'] ?? null,
             ]);
+
         } catch (\Throwable $e) {
             Log::error('Failed to fetch webInformations', ['error' => $e->getMessage()]);
 
